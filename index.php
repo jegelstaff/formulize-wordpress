@@ -313,16 +313,8 @@ if (!class_exists('FormulizePluginSettings')) {
 
         if ($role != null && $formulize_role_ids[$role->name] != null) {
             // we only support default wp roles at the moment
-            $formulize_group = new FormulizeGroup(
-                array(
-                    'groupid'=>$formulize_role_ids[$role->name],
-                    'name'=>$role->name,
-                    'description'=>$role->name
-                )
-            );
-
             // lazily create this group (incase this is the first time)
-            Formulize::createGroup($formulize_group);
+            Formulize::createGroup($formulize_role_ids[$role->name], $role->name, $role->name, $role->name);
             Formulize::addUserToGroup($user->ID, $formulize_role_ids[$role->name]);
         }
     }
