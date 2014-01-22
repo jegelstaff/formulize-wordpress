@@ -15,15 +15,6 @@ if (file_exists($formulize_path . DIRECTORY_SEPARATOR . 'integration_api.php')) 
     include_once($formulize_path . DIRECTORY_SEPARATOR . 'integration_api.php');
 }
 
-// Wordpress does not use role_ids, assign arbitrary values to wordpress built-in roles to satisfy formulize
-$formulize_role_ids = array(
-    "administrator" => 1,
-    "editor"        => 2,
-    "author"        => 3,
-    "contributor"   => 4,
-    "subscriber"    => 5,
-);
-
 if (!class_exists('FormulizePluginSettings')) {
     define('FORMULIZE_PLUGIN_ID', 'formulize-plugin');
     define('FORMULIZE_PLUGIN_NAME', 'Formulize Plugin');
@@ -201,6 +192,21 @@ if (!class_exists('FormulizePluginSettings')) {
         wp_enqueue_style('newstyle');
     }
 
+    // Wordpress doesn't have unique IDs for roles, so we do it ourselves inside this function
+    function wp_role_id_for_name($name) {
+        // Wordpress does not use role_ids, assign arbitrary values to wordpress built-in roles to satisfy formulize
+        $name = strtolower($name);  // sometimes role names are capitalized?
+        $formulize_role_ids = array(
+            "administrator" => 1,
+            "editor"        => 2,
+            "author"        => 3,
+            "contributor"   => 4,
+            "subscriber"    => 5,
+        );
+        return (isset($formulize_role_ids[$name]) ? $formulize_role_ids[$name] : null);
+    }
+
+
     /*
      * This function is called when a new user registers on the wordpress site.
      * It is called as the new user form is submitted, and pushes the information
@@ -234,6 +240,16 @@ if (!class_exists('FormulizePluginSettings')) {
     //I.e. We need a function in the API to query the formulize database so that we can confirm whether
     //the user already exists (Or is this in the API?)
     function synchronizeUsers() {
+        // first, sync all the groups
+        global $wp_roles;
+        if (! isset($wp_roles))
+            $wp_roles = new WP_Roles();
+        $roles_names = $wp_roles->get_names();
+        foreach ($roles_names as $key => $role_name) {
+            Formulize::createGroup(wp_role_id_for_name($role_name), $role_name, $role_name, $role_name);
+        }
+
+        // now sync all the users
         $users = get_users();
         foreach ($users as $wpUser) {
             $userData = array(
@@ -246,6 +262,9 @@ if (!class_exists('FormulizePluginSettings')) {
             $formUser = new FormulizeUser($userData);
             if (Formulize::createUser($formUser) == FALSE) {
                 echo "FALSE FALSE!";
+            } else {
+                // only create the groups the first time around
+                sync_user_groups($wpUser);
             }
             echo '<li>'. $wpUser->user_email . " " . $wpUser->ID . " " . $wpUser->display_name . " " . $wpUser->user_login . '</li>';
         }
@@ -300,22 +319,24 @@ if (!class_exists('FormulizePluginSettings')) {
     }
 
     function updateUserRole($user_id, $role_name) {
-        global $formulize_role_ids;
-        $role = get_role($role_name);
         $user = get_userdata($user_id);
+        // user account was remove from a role, but we don't know which one, so sync all groups
+        if ($user)
+            sync_user_groups($user);
+    }
 
-        // since there is no hook for removing a wordpress role, I make the assumption that users can belong to AT MOST one
-        // wordpress role at a time.
-        // remove user from all groups (we have no way to tell which role this user switched from)
-        foreach ($formulize_role_ids as $role_id) {
-            Formulize::removeUserFromGroup($user->ID, $role_id);
-        }
-
-        if ($role != null && $formulize_role_ids[$role->name] != null) {
-            // we only support default wp roles at the moment
-            // lazily create this group (incase this is the first time)
-            Formulize::createGroup($formulize_role_ids[$role->name], $role->name, $role->name, $role->name);
-            Formulize::addUserToGroup($user->ID, $formulize_role_ids[$role->name]);
+    function sync_user_groups(WP_User $user) {
+        global $wp_roles;
+        if (! isset($wp_roles))
+            $wp_roles = new WP_Roles();
+        $roles_names = $wp_roles->get_names();
+        $roles_names = array_map("strtolower", $roles_names);
+        foreach ($roles_names as $key => $role_name) {
+            if (in_array($role_name, $user->roles)) {
+                Formulize::addUserToGroup($user->ID, wp_role_id_for_name($role_name));
+            } else {
+                Formulize::removeUserFromGroup($user->ID, wp_role_id_for_name($role_name));
+            }
         }
     }
 
