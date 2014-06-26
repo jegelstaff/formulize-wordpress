@@ -9,12 +9,12 @@
     <table class="widefat">
         <thead>
             <tr>
-                <th><input type="submit" name="submit" value="Save Settings" class="button-primary" style="padding:8px;" /></th>
+                <th><input type="submit" name="submit" value="Save Settings" class="button-primary" /></th>
             </tr>
         </thead>
         <tfoot>
             <tr>
-                <th><input type="submit" name="submit" value="Save Settings" class="button-primary" style="padding:8px;" /></th>
+                <th><input type="submit" name="submit" value="Save Settings" class="button-primary" /></th>
             </tr>
         </tfoot>
         <tbody>
